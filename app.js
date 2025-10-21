@@ -1,37 +1,29 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import swaggerUi from 'swagger-ui-express';
-import swaggerJSDoc from 'swagger-jsdoc';
-import authRoutes from './routes/auth.routes.js';
-
-dotenv.config();
+import express from "express";
+import cors from "cors";
+import bodyParser from "body-parser";
+import swaggerJsdoc from "swagger-jsdoc";
+import swaggerUi from "swagger-ui-express";
+import authRoutes from "./routes/auth.routes.js";
 
 const app = express();
-app.use(express.json());
-app.use(cors());
 
-// ===================
-// 🔹 Swagger Config
-// ===================
+app.use(cors());
+app.use(bodyParser.json());
+
 const swaggerOptions = {
   definition: {
-    openapi: '3.0.0',
+    openapi: "3.0.0",
     info: {
-      title: 'Firebase Auth API',
-      version: '1.0.0',
-      description: 'API REST de autenticación con Firebase',
+      title: "Firebase Auth API",
+      version: "1.0.0",
+      description: "API REST de autenticación con Firebase",
     },
   },
-  apis: ['./routes/*.js'],
+  apis: ["./routes/*.js"],
 };
 
-const swaggerSpec = swaggerJSDoc(swaggerOptions);
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.use("/api", authRoutes);
 
-// ===================
-// 🔹 Rutas
-// ===================
-app.use('/api/auth', authRoutes);
+app.get("/", (req, res) => res.send("🔥 API Firebase Auth funcionando 🔥"));
 
 export default app;
