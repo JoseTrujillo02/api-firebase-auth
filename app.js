@@ -4,11 +4,15 @@ import bodyParser from "body-parser";
 import swaggerJsdoc from "swagger-jsdoc";
 import swaggerUi from "swagger-ui-express";
 import authRoutes from "./routes/auth.routes.js";
-
+import transactionsRoutes from './routes/transactions.routes.js';
+import helmet from 'helmet'; import rateLimit from 'express-rate-limit';
 const app = express();
 
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json());
+
+app.use(helmet());
+const authLimiter = rateLimit({ windowMs: 60_000, max: 5, standardHeaders: true, legacyHeaders: false });
 
 const swaggerOptions = {
   definition: {
@@ -21,9 +25,10 @@ const swaggerOptions = {
   },
   apis: ["./routes/*.js"],
 };
-
+app.use('/api/auth', authLimiter)
 app.use("/api", authRoutes);
-
+app.use('/api/transactions', transactionsRoutes);
+app.get('/health', (req, res) => res.status(200).json({ ok: true }));
 app.get("/", (req, res) => res.send("🔥 API Firebase Auth funcionando 🔥"));
 
 export default app;
