@@ -6,6 +6,7 @@ import swaggerUi from "swagger-ui-express";
 import authRoutes from "./routes/auth.routes.js";
 import transactionsRoutes from './routes/transactions.routes.js';
 import helmet from 'helmet'; import rateLimit from 'express-rate-limit';
+import settingsroutes from './routes/settings.routes.js';
 const app = express();
 
 app.use(cors());
@@ -25,8 +26,9 @@ const swaggerOptions = {
   },
   apis: ["./routes/*.js"],
 };
-app.use('/api/auth', authLimiter)
+app.use('/api/auth', authLimiter);
 app.use("/api", authRoutes);
+app.use("/api/settings", settingsroutes);
 app.use('/api/transactions', transactionsRoutes);
 app.get('/health', (req, res) => res.status(200).json({ ok: true }));
 app.get("/", (req, res) => res.send("🔥 API Firebase Auth funcionando 🔥"));
