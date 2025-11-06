@@ -7,7 +7,8 @@ export const createTxValidator = [
   body('amount').custom(v => /^\d+(\.\d{1,2})?$/.test(String(v))).withMessage('amount max 2 decimals'),
   body('category').isString().trim().notEmpty().withMessage('category required'),
   body('date').isISO8601().withMessage('date must be ISO-8601 (YYYY-MM-DD or ISO string)'),
-  body('descripcion').optional().isString().isLength({ max: 300 }).withMessage('note <= 300 chars'),
+  body('descripcion').optional().isString().isLength({ max: 300 }).withMessage('descripcion <= 300 chars'),
+  body('source').optional().isIn(['manual', 'voice']).withMessage('source must be manual|voice'),
   handleValidationErrors,
 ];
 
@@ -19,6 +20,7 @@ export const patchTxValidator = [
   body('category').optional().isString().trim().notEmpty(),
   body('date').optional().isISO8601(),
   body('descripcion').optional().isString().isLength({ max: 300 }),
+  body('source').optional().isIn(['manual', 'voice']),
   handleValidationErrors,
 ];
 
