@@ -7,6 +7,7 @@ import authRoutes from "./routes/auth.routes.js";
 import transactionsRoutes from './routes/transactions.routes.js';
 import helmet from 'helmet'; import rateLimit from 'express-rate-limit';
 import settingsroutes from './routes/settings.routes.js';
+import accountRoutes from "./routes/account.routes.js";
 const app = express();
 
 app.use(cors());
@@ -27,6 +28,7 @@ const swaggerOptions = {
   apis: ["./routes/*.js"],
 };
 app.use('/api/auth', authLimiter);
+app.use("/api/account", accountRoutes);
 app.use("/api", authRoutes);
 app.use("/api/settings", settingsroutes);
 app.use('/api/transactions', transactionsRoutes);
