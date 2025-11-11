@@ -7,11 +7,13 @@ export const putCapitalValidator = [
   body("amount")
     .exists().withMessage("amount requerido")
     .isFloat({ gt: 0 }).withMessage("amount debe ser > 0")
-    .custom(v => /^\d+(\.\d{1,2})?$/.test(String(v))).withMessage("amount máx. 2 decimales"),
+    .custom((v) => /^\d+(\.\d{1,2})?$/.test(String(v))).withMessage("amount máx. 2 decimales"),
+  // periodicidad OPCIONAL en actualizaciones; OBLIGATORIA solo en la PRIMERA creación (lo valida el controller)
   body("periodicity")
-    .exists().withMessage("periodicity requerida")
+    .optional()
     .isString().withMessage("periodicity string")
-    .custom(v => ALLOWED.includes(String(v).toLowerCase())).withMessage(`periodicity debe ser: ${ALLOWED.join(", ")}`),
+    .custom((v) => ALLOWED.includes(String(v).toLowerCase()))
+    .withMessage(`periodicity debe ser: ${ALLOWED.join(", ")}`),
   handleValidationErrors,
 ];
 
@@ -21,7 +23,7 @@ export function handleValidationErrors(req, res, next) {
   return res.status(422).json({
     error: {
       code: "VALIDATION_ERROR",
-      fields: r.array().map(e => ({ field: e.path, message: e.msg })),
+      fields: r.array().map((e) => ({ field: e.path, message: e.msg })),
     },
   });
 }
