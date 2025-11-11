@@ -17,6 +17,12 @@ export const putCapitalValidator = [
   handleValidationErrors,
 ];
 
+export const deleteCapitalValidator = [
+  body("confirm")
+    .exists().withMessage("confirm requerido")
+    .custom((v) => v === "DELETE").withMessage('confirm debe ser "DELETE"'),
+  handleValidationErrors,
+];
 export function handleValidationErrors(req, res, next) {
   const r = validationResult(req);
   if (r.isEmpty()) return next();
@@ -27,3 +33,5 @@ export function handleValidationErrors(req, res, next) {
     },
   });
 }
+
+

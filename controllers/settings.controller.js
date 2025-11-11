@@ -3,6 +3,8 @@ import { admin, db } from "../firebase.js";
 
 const CAPITAL_REF = (uid) =>
   db.collection("users").doc(uid).collection("settings").doc("capital");
+const TX_COL = (uid) =>
+  db.collection("users").doc(uid).collection("transactions");
 
 // Normaliza periodicidad a minúsculas
 function normalizePeriodicity(p) {
@@ -55,7 +57,6 @@ export async function putCapital(req, res) {
     let beforeAmount = 0;
     let afterAmount = 0;
     let finalPeriodicity = null;
-    let updatedAtIso = null;
 
     await db.runTransaction(async (t) => {
       const snap = await t.get(ref);
@@ -103,7 +104,7 @@ export async function putCapital(req, res) {
 
     // Leer para resolver updatedAt
     const saved = await ref.get();
-    updatedAtIso = saved.data().updatedAt?.toDate()?.toISOString() ?? null;
+    const updatedAtIso = saved.data().updatedAt?.toDate()?.toISOString() ?? null;
 
     return res.status(wasCreated ? 201 : 200).json({
       amount: afterAmount,
@@ -125,6 +126,55 @@ export async function putCapital(req, res) {
         },
       });
     }
+    return res
+      .status(500)
+      .json({ error: { code: "INTERNAL", message: err.message } });
+  }
+}
+
+/**
+ * DELETE /api/settings/capital
+ * Borra:
+ * 1) El documento de capital (si existe)
+ * 2) TODAS las transacciones del usuario
+ * Requiere body: { "confirm": "DELETE" }
+ */
+export async function deleteCapital(req, res) {
+  try {
+    const { uid } = req.user;
+    const capitalRef = CAPITAL_REF(uid);
+    const txCol = TX_COL(uid);
+
+    // 1) Eliminar capital primero (bloquea la creación de nuevas transacciones en tu API)
+    const capSnap = await capitalRef.get();
+    const capitalExists = capSnap.exists;
+    if (capitalExists) {
+      await capitalRef.delete();
+    }
+
+    // 2) Eliminar TODAS las transacciones en lotes paginados
+    let deletedCount = 0;
+    const pageSize = 500;
+    // borrado iterativo hasta vaciar la colección
+    while (true) {
+      const snap = await txCol.limit(pageSize).get();
+      if (snap.empty) break;
+
+      const batch = db.batch();
+      snap.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+      deletedCount += snap.size;
+    }
+
+    return res.status(200).json({
+      status: "CAPITAL_AND_TRANSACTIONS_DELETED",
+      capitalExisted: capitalExists,
+      transactionsDeleted: deletedCount,
+      deletedAt: new Date().toISOString(),
+    });
+  } catch (err) {
     return res
       .status(500)
       .json({ error: { code: "INTERNAL", message: err.message } });
