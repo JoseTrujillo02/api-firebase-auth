@@ -208,3 +208,65 @@ export async function patchTransaction(req, res) {
     return res.status(500).json({ error: { code: 'INTERNAL', message: err.message } });
   }
 }
+
+export async function deleteTransaction(req, res) {
+  try {
+    const { uid } = req.user;
+    const { id } = req.params;
+
+    const ref = TX_PATH(uid).doc(id);
+    const capRef = CAPITAL_REF(uid);
+
+    let payload = null;
+
+    await db.runTransaction(async (t) => {
+      const snap = await t.get(ref);
+      if (!snap.exists) {
+        const err = new Error('NOT_FOUND');
+        err.status = 404;
+        throw err;
+      }
+      const tx = snap.data();
+
+      const capSnap = await t.get(capRef);
+      if (!capSnap.exists) {
+        const err = new Error('CAPITAL_NOT_CONFIGURED');
+        err.status = 409;
+        throw err;
+      }
+      const cap = capSnap.data();
+
+      const current = Number(cap.amount) || 0;
+      // Revertimos el efecto de la transacción:
+      // - Si era income → restamos
+      // - Si era expense → sumamos
+      const delta = tx.type === 'income' ? -Number(tx.amount) : Number(tx.amount);
+      const next = Math.max(0, current + delta);
+
+      t.delete(ref);
+      t.update(capRef, {
+        amount: next,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      payload = {
+        deletedId: id,
+        type: tx.type,
+        amount: tx.amount,
+        capitalBefore: current,
+        deltaApplied: delta,
+        capitalAfter: next,
+      };
+    });
+
+    return res.status(200).json({ status: 'DELETED', ...payload });
+  } catch (err) {
+    if (err.message === 'NOT_FOUND' || err.status === 404) {
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Transaction not found' } });
+    }
+    if (err.message === 'CAPITAL_NOT_CONFIGURED' || err.status === 409) {
+      return res.status(409).json({ error: { code: 'CAPITAL_NOT_CONFIGURED', message: 'Configura tu capital en /api/settings/capital antes de eliminar transacciones.' } });
+    }
+    return res.status(500).json({ error: { code: 'INTERNAL', message: err.message } });
+  }
+}

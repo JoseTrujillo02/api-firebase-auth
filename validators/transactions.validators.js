@@ -34,6 +34,11 @@ export const listTxValidator = [
   handleValidationErrors,
 ];
 
+export const deleteTxValidator = [
+  param('id').isString().notEmpty(),
+  handleValidationErrors,
+];
+
 export function handleValidationErrors(req, res, next) {
   const result = validationResult(req);
   if (result.isEmpty()) return next();
