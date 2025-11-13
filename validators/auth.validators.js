@@ -4,8 +4,9 @@ import { body, validationResult } from 'express-validator';
 /* =========================
    Lista de palabras prohibidas (versión resumida)
    - Se comparan en minúsculas y sin acentos
-   - BANNED_SET: se usa para displayName / password
-   - BANNED_SET_4PLUS: solo palabras de 4+ letras (para emails)
+   - BANNED_SET: se usa para displayName / password (tokens)
+   - BANNED_SET_4PLUS: solo palabras de 4+ letras (para emails,
+     se buscan como subcadena en la parte local del correo)
 ========================= */
 const BANNED_WORDS = [
   // Español – insultos/VULGAR
@@ -50,7 +51,6 @@ function normalize(str) {
 // Normaliza leetspeak básico
 function leetNormalize(str) {
   return String(str)
-    .replace(/@/g, 'a')
     .replace(/4/g, 'a')
     .replace(/3/g, 'e')
     .replace(/1|!|\|/g, 'i')
@@ -82,18 +82,36 @@ const SQL_TOKENS = new Set([
 ]);
 
 function hasSuspiciousSQLTokens(str) {
-  const tokens = normalize(leetNormalize(str)).split(/[^a-z0-9]+/).filter(Boolean);
+  const tokens = normalize(leetNormalize(str))
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
   return tokens.some(t => SQL_TOKENS.has(t));
 }
 
-// Para email: solo baneamos palabras ofensivas de 4+ letras
+/* =========================
+   Filtros de palabras prohibidas
+========================= */
+
+// Para email: revisa SOLO la parte local (antes de @)
+// y busca palabras prohibidas (4+ letras) como SUBCADENA
 function emailHasBannedLenient(email) {
-  const s = normalize(leetNormalize(email));
-  const tokens = s.split(/[^a-z0-9]+/).filter(Boolean);
-  return tokens.some(tok => BANNED_SET_4PLUS.has(tok));
+  const s = normalize(email);
+  const [local] = s.split('@');
+  if (!local) return false;
+
+  // Normalizamos leet y quitamos símbolos para evitar evasiones tipo "p.e.n.d.e.j.o"
+  const localSanitized = leetNormalize(local).replace(/[^a-z0-9]+/g, '');
+
+  for (const banned of BANNED_SET_4PLUS) {
+    if (localSanitized.includes(banned)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // Para texto genérico (displayName, password)
+// Aquí seguimos usando tokens completos, no subcadenas
 function textHasBanned(text) {
   const s = normalize(leetNormalize(text));
   const tokens = s.split(/[^a-z0-9]+/).filter(Boolean);
@@ -146,6 +164,7 @@ export const registerValidator = [
         throw new Error('email contiene contenido no permitido');
       }
 
+      // ← aquí ya NO se cuela "idiota919310@gmail.com"
       if (emailHasBannedLenient(value)) {
         throw new Error('email contiene términos no permitidos');
       }
