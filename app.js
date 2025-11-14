@@ -14,7 +14,7 @@ app.use(cors());
 app.use(express.json());
 
 app.use(helmet());
-const authLimiter = rateLimit({ windowMs: 60_000, max: 5, standardHeaders: true, legacyHeaders: false });
+const authLimiter = rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false });
 
 const swaggerOptions = {
   definition: {
