@@ -1,15 +1,10 @@
-// validators/auth.validators.js
+// validators/auth.validators.js 
 import { body, validationResult } from 'express-validator';
 
 /* =========================
    Lista de palabras prohibidas (versión resumida)
-   - Se comparan en minúsculas y sin acentos
-   - BANNED_SET: se usa para displayName / password (tokens)
-   - BANNED_SET_4PLUS: solo palabras de 4+ letras (para emails,
-     se buscan como subcadena en la parte local del correo)
 ========================= */
 const BANNED_WORDS = [
-  // Español – insultos/VULGAR
   'puta','puto','pendejo','pendeja','cabron','cabrona','cabrón',
   'verga','chingar','chingada','chingado','mierda','cagada',
   'imbecil','tarado','retrasado','subnormal','anormal','mongolo',
@@ -17,19 +12,19 @@ const BANNED_WORDS = [
   'zorra','perra','coño','vagina','pene','follar','coger','mamar',
   'chupar','sexo','porno','pornografia','orgasmo','masturbar',
   'culo','ojete','bolas','cojones','huevos','tetas','violar','violador',
-
-  // Inglés – insultos/sexuales
-  'fuck','fucked','fucker','fucking','motherfucker',
-  'bitch','bitches','asshole','shit','cunt','whore','slut',
-  'dick','cock','pussy','penis','vagina','rape','rapist',
-
-  // Slurs fuertes
-  'nigger','nigga','faggot','dyke','retard',
-
-  // Seguridad / inyección
+  'fuck','fucked','fucker','fucking','motherfucker','bitch','bitches',
+  'asshole','shit','cunt','whore','slut','dick','cock','pussy','penis',
+  'rape','rapist','nigger','nigga','faggot','dyke','retard',
   '<script','</script','javascript','eval','exec',
   'drop table','union select','delete from','insert into','or 1=1','admin--',
 ];
+
+function normalize(str) {
+  return String(str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
 
 const BANNED_SET = new Set(BANNED_WORDS.map(normalize));
 const BANNED_SET_4PLUS = new Set(
@@ -41,14 +36,6 @@ const BANNED_SET_4PLUS = new Set(
 /* =========================
    Helpers sencillos
 ========================= */
-function normalize(str) {
-  return String(str || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
-}
-
-// Normaliza leetspeak básico
 function leetNormalize(str) {
   return String(str)
     .replace(/4/g, 'a')
@@ -64,17 +51,18 @@ function hasControlChars(str) {
   return /[\x00-\x1F\x7F]/.test(str);
 }
 
-// XSS básico
 function hasHtmlTagsOrScripts(str) {
   const s = str.toLowerCase();
-  if (/<[^>]+>/.test(s)) return true;
-  if (s.includes('<script') || s.includes('</script')) return true;
-  if (s.includes('javascript:')) return true;
-  if (s.includes('onerror=') || s.includes('onload=')) return true;
-  return false;
+  return (
+    /<[^>]+>/.test(s) ||
+    s.includes('<script') ||
+    s.includes('</script') ||
+    s.includes('javascript:') ||
+    s.includes('onerror=') ||
+    s.includes('onload=')
+  );
 }
 
-// Tokens SQL básicos
 const SQL_TOKENS = new Set([
   'select','insert','update','delete','drop','union','alter','create','truncate',
   'table','database','schema','grant','revoke','execute','exec','where','from',
@@ -92,52 +80,52 @@ function hasSuspiciousSQLTokens(str) {
    Filtros de palabras prohibidas
 ========================= */
 
-// Para email: revisa SOLO la parte local (antes de @)
-// y busca palabras prohibidas (4+ letras) como SUBCADENA
+// Para email (solo parte local)
 function emailHasBannedLenient(email) {
   const s = normalize(email);
   const [local] = s.split('@');
   if (!local) return false;
 
-  // Normalizamos leet y quitamos símbolos para evitar evasiones tipo "p.e.n.d.e.j.o"
-  const localSanitized = leetNormalize(local).replace(/[^a-z0-9]+/g, '');
+  const clean = leetNormalize(local).replace(/[^a-z0-9]+/g, '');
 
   for (const banned of BANNED_SET_4PLUS) {
-    if (localSanitized.includes(banned)) {
-      return true;
-    }
+    if (clean.includes(banned)) return true;
   }
   return false;
 }
 
-// Para texto genérico (displayName, password)
-// Aquí seguimos usando tokens completos, no subcadenas
+// Para nombres y contraseñas
 function textHasBanned(text) {
   const s = normalize(leetNormalize(text));
   const tokens = s.split(/[^a-z0-9]+/).filter(Boolean);
   return tokens.some(tok => BANNED_SET.has(tok));
 }
 
-// Validación simple de nombre humano
+/* =========================
+   NUEVA VALIDACIÓN DE NOMBRE
+   - Acepta 1 o varios nombres
+   - Solo letras y espacios
+   - Permite acentos y ñ
+========================= */
 function isHumanNameStrict(name) {
   if (typeof name !== 'string') return false;
+
   const raw = name.trim();
 
-  // Longitud razonable
   if (raw.length < 2 || raw.length > 120) return false;
 
-  // Solo letras, espacios, apóstrofe y guion
-  const allowed = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ' -]+$/u;
+  // ❗ PERMITE 1 o más palabras, SOLO letras+espacios
+  const allowed = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]+$/u;
   if (!allowed.test(raw)) return false;
 
-  // Al menos dos palabras de 2+ letras (nombre y apellido)
-  const words = raw.split(/\s+/).filter(w => w.length >= 2);
-  if (words.length < 2) return false;
+  // No números ni símbolos
+  if (/[0-9]/.test(raw)) return false;
 
-  // Sin control chars, scripts ni groserías
-  if (hasControlChars(raw)) return false;
-  if (hasHtmlTagsOrScripts(raw)) return false;
+  // No groserías
   if (textHasBanned(raw)) return false;
+
+  // No scripts
+  if (hasControlChars(raw) || hasHtmlTagsOrScripts(raw)) return false;
 
   return true;
 }
@@ -147,66 +135,57 @@ function isHumanNameStrict(name) {
 ========================= */
 export const registerValidator = [
   body('email')
-    .isEmail().withMessage('email inválido')
+    .isEmail().withMessage('Por favor escribe un correo válido, por ejemplo usuario@correo.com.')
     .bail()
     .custom((value) => {
-      if (typeof value !== 'string') throw new Error('email inválido');
+      if (typeof value !== 'string') {
+        throw new Error('Por favor escribe un correo válido, por ejemplo usuario@correo.com.');
+      }
 
       if (hasControlChars(value)) {
-        throw new Error('email contiene caracteres inválidos');
+        throw new Error('Tu correo contiene símbolos no permitidos.');
       }
 
       if (hasHtmlTagsOrScripts(value)) {
-        throw new Error('email contiene contenido no permitido');
+        throw new Error('Tu correo contiene texto no permitido por seguridad.');
       }
 
       if (hasSuspiciousSQLTokens(value)) {
-        throw new Error('email contiene contenido no permitido');
+        throw new Error('Tu correo contiene palabras no permitidas.');
       }
 
-      // ← aquí ya NO se cuela "idiota919310@gmail.com"
       if (emailHasBannedLenient(value)) {
-        throw new Error('email contiene términos no permitidos');
+        throw new Error('Tu correo no puede contener groserías en la parte del nombre.');
       }
 
-      if (value.length > 254) throw new Error('email demasiado largo');
+      if (value.length < 6) {
+        throw new Error('Tu correo es demasiado corto. Revisa que esté bien escrito.');
+      }
 
-      const parts = value.split('@');
-      if (parts.length !== 2) throw new Error('email inválido');
-      if (parts[0].length === 0 || parts[1].length < 3) throw new Error('email inválido');
-      if (!parts[1].includes('.')) throw new Error('email inválido');
+      if (value.length > 254) {
+        throw new Error('Tu correo es demasiado largo. Usa uno más corto.');
+      }
+
+      if (!value.split('@')[1]?.includes('.')) {
+        throw new Error('A tu correo le falta el punto (ejemplo: gmail.com).');
+      }
 
       return true;
     }),
 
   body('password')
-    .isString().withMessage('password debe ser string')
-    .isLength({ min: 8 }).withMessage('password mínimo 8 caracteres')
-    .bail()
-    .custom((value) => {
-      if (hasControlChars(value)) {
-        throw new Error('password contiene caracteres inválidos');
-      }
-      if (hasHtmlTagsOrScripts(value)) {
-        throw new Error('password contiene contenido no permitido');
-      }
-      if (textHasBanned(value)) {
-        throw new Error('password contiene términos no permitidos');
-      }
-      return true;
-    }),
+    .isString().withMessage('La contraseña es obligatoria.')
+    .isLength({ min: 8, max: 20 }).withMessage('Tu contraseña debe tener entre 8 y 20 caracteres.'),
 
   body('displayName')
-    .exists({ checkFalsy: true }).withMessage('displayName requerido')
+    .exists({ checkFalsy: true }).withMessage('Por favor escribe tu nombre.')
     .bail()
-    .isLength({ min: 2, max: 120 }).withMessage('displayName debe tener entre 2 y 120 caracteres')
+    .isLength({ min: 2, max: 120 }).withMessage('Tu nombre debe tener entre 2 y 120 letras.')
     .bail()
     .custom((value) => {
       if (!isHumanNameStrict(value)) {
         throw new Error(
-          'displayName debe ser un nombre real: solo letras (incluye acentos/ñ/ü), ' +
-          'espacios, apóstrofe y guion; al menos 2 palabras de 2+ caracteres cada una; ' +
-          'sin palabras ofensivas ni contenido malicioso'
+          'Tu nombre solo puede incluir letras y espacios, sin números ni palabras ofensivas.'
         );
       }
       return true;
@@ -216,11 +195,23 @@ export const registerValidator = [
 ];
 
 export const loginValidator = [
-  body('email').isEmail().withMessage('email inválido'),
-  body('password').isString().isLength({ min: 6 }).withMessage('password min 6'),
+  body('email')
+    .isEmail().withMessage('Por favor escribe un correo válido.'),
+  body('password')
+    .isString().isLength({ min: 6 })
+    .withMessage('Tu contraseña debe tener al menos 6 caracteres.'),
   handleValidationErrors,
 ];
 
+export const refreshTokenValidator = [
+  body('refreshToken')
+    .exists({ checkFalsy: true })
+    .withMessage('El refreshToken es obligatorio.')
+    .bail()
+    .isString()
+    .withMessage('El refreshToken debe ser una cadena de texto.'),
+  handleValidationErrors,
+];
 export function handleValidationErrors(req, res, next) {
   const r = validationResult(req);
   if (r.isEmpty()) return next();
