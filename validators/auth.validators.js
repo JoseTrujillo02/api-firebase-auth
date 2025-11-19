@@ -6,7 +6,7 @@ import { body, validationResult } from 'express-validator';
 ========================= */
 const BANNED_WORDS = [
   'puta','puto','pendejo','pendeja','cabron','cabrona','cabrón',
-  'verga','chingar','chingada','chingado','mierda','cagada',
+  'verga','chingar','chingada','chingado','mierda','cagada','chingatumadre', 
   'imbecil','tarado','retrasado','subnormal','anormal','mongolo',
   'idiota','estupido','marica','maricon','maricón','joto','culero',
   'zorra','perra','coño','vagina','pene','follar','coger','mamar',
