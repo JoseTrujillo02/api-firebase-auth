@@ -173,9 +173,27 @@ export const registerValidator = [
       return true;
     }),
 
+  // ✅ PASSWORD: misma idea de estructura que email (un .custom con sus checks),
+  // pero SOLO con las reglas que tú pediste: obligatoria, 8–20 caracteres.
   body('password')
-    .isString().withMessage('La contraseña es obligatoria.')
-    .isLength({ min: 8, max: 20 }).withMessage('Tu contraseña debe tener entre 8 y 20 caracteres.'),
+    .custom((value) => {
+      // Campo faltante o vacío
+      if (value === undefined || value === null || value === '') {
+        throw new Error('La contraseña es obligatoria.');
+      }
+
+      if (typeof value !== 'string') {
+        throw new Error('La contraseña debe ser una cadena de texto.');
+      }
+
+      const trimmed = value.trim();
+
+      if (trimmed.length < 8 || trimmed.length > 20) {
+        throw new Error('Tu contraseña debe tener entre 8 y 20 caracteres.');
+      }
+
+      return true;
+    }),
 
   body('displayName')
     .exists({ checkFalsy: true }).withMessage('Por favor escribe tu nombre.')
@@ -212,6 +230,7 @@ export const refreshTokenValidator = [
     .withMessage('El refreshToken debe ser una cadena de texto.'),
   handleValidationErrors,
 ];
+
 export function handleValidationErrors(req, res, next) {
   const r = validationResult(req);
   if (r.isEmpty()) return next();
