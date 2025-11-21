@@ -173,11 +173,10 @@ export const registerValidator = [
       return true;
     }),
 
-  // ✅ PASSWORD: misma idea de estructura que email (un .custom con sus checks),
-  // pero SOLO con las reglas que tú pediste: obligatoria, 8–20 caracteres.
+  // PASSWORD: mismas reglas que pediste (obligatoria, 8–20),
+  // usando .custom para regresar el mismo tipo de JSON de error.
   body('password')
     .custom((value) => {
-      // Campo faltante o vacío
       if (value === undefined || value === null || value === '') {
         throw new Error('La contraseña es obligatoria.');
       }
@@ -228,6 +227,30 @@ export const refreshTokenValidator = [
     .bail()
     .isString()
     .withMessage('El refreshToken debe ser una cadena de texto.'),
+  handleValidationErrors,
+];
+
+// 🔹 NUEVO: validador para cambiar contraseña (estando logueado)
+// Solo valida el campo newPassword con las mismas reglas de longitud
+export const changePasswordValidator = [
+  body('newPassword')
+    .custom((value) => {
+      if (value === undefined || value === null || value === '') {
+        throw new Error('La nueva contraseña es obligatoria.');
+      }
+
+      if (typeof value !== 'string') {
+        throw new Error('La nueva contraseña debe ser una cadena de texto.');
+      }
+
+      const trimmed = value.trim();
+
+      if (trimmed.length < 8 || trimmed.length > 20) {
+        throw new Error('La nueva contraseña debe tener entre 8 y 20 caracteres.');
+      }
+
+      return true;
+    }),
   handleValidationErrors,
 ];
 

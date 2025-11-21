@@ -12,6 +12,7 @@ export async function verifyIdToken(req, res, next) {
     const idToken = auth.split(" ")[1];
     const decoded = await admin.auth().verifyIdToken(idToken);
     req.user = { uid: decoded.uid, claims: decoded };
+    req.idToken = idToken;
     next();
   } catch {
     return res
