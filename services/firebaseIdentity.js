@@ -1,6 +1,6 @@
 // services/firebaseIdentity.js
 
-// Base de Firebase Identity (login / registro)
+// Base de Firebase Identity (login / registro / cambio de contraseña)
 const IDENTITY_BASE = 'https://identitytoolkit.googleapis.com/v1';
 // Base de Secure Token (refresh de tokens)
 const SECURETOKEN_BASE = 'https://securetoken.googleapis.com/v1';
@@ -11,7 +11,7 @@ function getApiKey() {
   return key;
 }
 
-// Endpoint para operaciones de identidad (signIn, signUp, etc.)
+// Endpoint para operaciones de identidad (signIn, signUp, update, etc.)
 function endpoint(path) {
   const key = getApiKey();
   return `${IDENTITY_BASE}${path}?key=${key}`;
@@ -77,7 +77,7 @@ export async function signUpWithPassword(email, password, displayName) {
   });
 }
 
-// 🔹 NUEVO: Refresh de ID Token usando el refreshToken
+// 🔹 Refresh de ID Token usando el refreshToken
 export async function refreshIdToken(refreshToken) {
   const url = tokenEndpoint('/token');
 
@@ -93,5 +93,18 @@ export async function refreshIdToken(refreshToken) {
       'Content-Type': 'application/x-www-form-urlencoded',
     },
     body,
+  });
+}
+
+// 🔹 Cambiar contraseña usando el idToken actual (usuario logueado)
+export async function updatePasswordWithIdToken(idToken, newPassword) {
+  const url = endpoint('/accounts:update');
+  return fetchJson(url, {
+    method: 'POST',
+    body: JSON.stringify({
+      idToken,
+      password: newPassword,
+      returnSecureToken: true, // devuelve nuevos idToken / refreshToken
+    }),
   });
 }
