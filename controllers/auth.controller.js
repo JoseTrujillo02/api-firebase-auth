@@ -62,19 +62,19 @@ export async function register(req, res) {
 }
 
 // Login de usuario
+// Login de usuario
 export async function login(req, res) {
   try {
     const { email, password } = req.body;
 
     const data = await signInWithPassword(email, password);
-    // data: { idToken, refreshToken, expiresIn, localId, email, registered: true }
+    // data: { idToken, refreshToken, expiresIn, localId, email }
 
     let displayName = null;
     try {
       const user = await admin.auth().getUser(data.localId);
       displayName = user.displayName || null;
     } catch (e) {
-      // opcional: log
       console.error('Error obteniendo displayName en login:', e);
     }
 
@@ -90,18 +90,58 @@ export async function login(req, res) {
         expiresIn: Number(data.expiresIn),
       },
     });
+
   } catch (err) {
-    console.error('Error en login:', err);
-    const status = err.status || 500;
-    return res.status(status).json({
+  console.error('Error en login:', err);
+
+  const fbCode = err?.message || '';
+
+  // 🔹 EMAIL_NOT_FOUND → Correo no existe
+  if (fbCode.includes('EMAIL_NOT_FOUND')) {
+    return res.status(422).json({
       error: {
         code: 'AUTH_LOGIN_ERROR',
-        message: 'No se pudo iniciar sesión. Revisa tu correo y contraseña.',
-        detail: err.message || 'UNKNOWN_ERROR',
+        message: 'El correo que ingresaste no está registrado.',
+        detail: 'EMAIL_NOT_FOUND',
       },
     });
   }
+
+  // 🔹 INVALID_PASSWORD → Contraseña incorrecta
+  if (fbCode.includes('INVALID_PASSWORD')) {
+    return res.status(422).json({
+      error: {
+        code: 'AUTH_LOGIN_ERROR',
+        message: 'La contraseña es incorrecta.',
+        detail: 'INVALID_PASSWORD',
+      },
+    });
+  }
+
+  // 🔹 USER_DISABLED
+  if (fbCode.includes('USER_DISABLED')) {
+    return res.status(403).json({
+      error: {
+        code: 'AUTH_LOGIN_ERROR',
+        message: 'Esta cuenta ha sido deshabilitada.',
+        detail: 'USER_DISABLED',
+      },
+    });
+  }
+
+  // 🔹 Cualquier otro error genérico
+  const status = err.status || 500;
+  return res.status(status).json({
+    error: {
+      code: 'AUTH_LOGIN_ERROR',
+      message: 'No se pudo iniciar sesión. Revisa tu correo y contraseña.',
+      detail: fbCode || 'UNKNOWN_ERROR',
+    },
+  });
 }
+
+}
+
 
 // Refresh de tokens usando el refreshToken
 export async function refresh(req, res) {

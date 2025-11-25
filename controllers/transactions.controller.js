@@ -3,7 +3,6 @@ import { admin, db } from '../firebase.js';
 
 const TX_PATH = (uid) => db.collection('users').doc(uid).collection('transactions');
 const CAPITAL_REF = (uid) => db.collection('users').doc(uid).collection('settings').doc('capital');
-
 // --- helpers ---
 function parseIsoToTimestamp(iso) {
   const d = new Date(iso);
@@ -268,5 +267,44 @@ export async function deleteTransaction(req, res) {
       return res.status(409).json({ error: { code: 'CAPITAL_NOT_CONFIGURED', message: 'Configura tu capital en /api/settings/capital antes de eliminar transacciones.' } });
     }
     return res.status(500).json({ error: { code: 'INTERNAL', message: err.message } });
+  }
+}
+// 🔹 NUEVO: listar categorías distintas de las transacciones de un usuario
+export async function listTransactionCategories(req, res) {
+  try {
+    const { uid } = req.user;
+
+    // Solo traemos el campo "category" para optimizar
+    const snap = await TX_PATH(uid).select('category').get();
+
+    const categoriesSet = new Set();
+
+    snap.forEach((doc) => {
+      const data = doc.data();
+      if (!data) return;
+
+      const raw = data.category;
+      if (!raw) return;
+
+      const cat = String(raw).trim();
+      if (!cat) return;
+
+      categoriesSet.add(cat);
+    });
+
+    const categories = Array.from(categoriesSet);
+
+    return res.status(200).json({
+      categories, // ejemplo: ["Ropa", "Comida", "Transporte"]
+    });
+  } catch (err) {
+    console.error('Error listTransactionCategories:', err);
+    return res.status(500).json({
+      error: {
+        code: 'INTERNAL',
+        message: 'No se pudieron obtener las categorías de tus transacciones.',
+        detail: err.message || 'UNKNOWN_ERROR',
+      },
+    });
   }
 }
