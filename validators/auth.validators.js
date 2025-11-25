@@ -1,5 +1,6 @@
-// validators/auth.validators.js 
+// validators/auth.validators.js  
 import { body, validationResult } from 'express-validator';
+import { admin } from '../firebase.js'; // 👈 Para validar si el correo ya está registrado en Firebase
 
 /* =========================
    Lista de palabras prohibidas (versión resumida)
@@ -102,7 +103,7 @@ function textHasBanned(text) {
 }
 
 /* =========================
-   NUEVA VALIDACIÓN DE NOMBRE
+   VALIDACIÓN DE NOMBRE
    - Acepta 1 o varios nombres
    - Solo letras y espacios
    - Permite acentos y ñ
@@ -114,7 +115,7 @@ function isHumanNameStrict(name) {
 
   if (raw.length < 2 || raw.length > 120) return false;
 
-  // ❗ PERMITE 1 o más palabras, SOLO letras+espacios
+  // PERMITE 1 o más palabras, SOLO letras+espacios
   const allowed = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]+$/u;
   if (!allowed.test(raw)) return false;
 
@@ -133,11 +134,13 @@ function isHumanNameStrict(name) {
 /* =========================
    Validadores
 ========================= */
+
+// REGISTER
 export const registerValidator = [
   body('email')
     .isEmail().withMessage('Por favor escribe un correo válido, por ejemplo usuario@correo.com.')
     .bail()
-    .custom((value) => {
+    .custom(async (value) => {
       if (typeof value !== 'string') {
         throw new Error('Por favor escribe un correo válido, por ejemplo usuario@correo.com.');
       }
@@ -170,11 +173,36 @@ export const registerValidator = [
         throw new Error('A tu correo le falta el punto (ejemplo: gmail.com).');
       }
 
+      // 🔹 AQUÍ viene la parte de Firebase, corregida
+
+      let userExists = false;
+
+      try {
+        const userRecord = await admin.auth().getUserByEmail(value);
+        // Si llegamos aquí sin error, el usuario EXISTE
+        if (userRecord) {
+          userExists = true;
+        }
+      } catch (err) {
+        // Caso normal: el usuario NO existe
+        if (err?.code === 'auth/user-not-found') {
+          userExists = false;
+        } else {
+          // Cualquier otro error de Firebase
+          console.error('Error verificando correo en Firebase:', err);
+          throw new Error('No se pudo validar tu correo en este momento. Intenta de nuevo más tarde.');
+        }
+      }
+
+      if (userExists) {
+        // ✅ Este mensaje SÍ llega directo al handleValidationErrors
+        throw new Error('Este correo ya está registrado. Usa otro correo o inicia sesión.');
+      }
+
       return true;
     }),
 
-  // PASSWORD: mismas reglas que pediste (obligatoria, 8–20),
-  // usando .custom para regresar el mismo tipo de JSON de error.
+  // PASSWORD
   body('password')
     .custom((value) => {
       if (value === undefined || value === null || value === '') {
@@ -194,6 +222,7 @@ export const registerValidator = [
       return true;
     }),
 
+  // DISPLAY NAME
   body('displayName')
     .exists({ checkFalsy: true }).withMessage('Por favor escribe tu nombre.')
     .bail()
@@ -211,6 +240,7 @@ export const registerValidator = [
   handleValidationErrors,
 ];
 
+// LOGIN
 export const loginValidator = [
   body('email')
     .isEmail().withMessage('Por favor escribe un correo válido.'),
@@ -220,6 +250,7 @@ export const loginValidator = [
   handleValidationErrors,
 ];
 
+// REFRESH TOKEN
 export const refreshTokenValidator = [
   body('refreshToken')
     .exists({ checkFalsy: true })
@@ -230,8 +261,7 @@ export const refreshTokenValidator = [
   handleValidationErrors,
 ];
 
-// 🔹 NUEVO: validador para cambiar contraseña (estando logueado)
-// Solo valida el campo newPassword con las mismas reglas de longitud
+// CHANGE PASSWORD (logueado)
 export const changePasswordValidator = [
   body('newPassword')
     .custom((value) => {
@@ -254,13 +284,19 @@ export const changePasswordValidator = [
   handleValidationErrors,
 ];
 
+/* =========================
+   Handler global de validaciones
+========================= */
 export function handleValidationErrors(req, res, next) {
   const r = validationResult(req);
   if (r.isEmpty()) return next();
   return res.status(422).json({
     error: {
       code: 'VALIDATION_ERROR',
-      fields: r.array().map(e => ({ field: e.path, message: e.msg })),
+      fields: r.array().map(e => ({
+        field: e.path,
+        message: e.msg,
+      })),
     },
   });
 }
