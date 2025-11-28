@@ -241,14 +241,58 @@ export const registerValidator = [
 ];
 
 // LOGIN
+// ✅ loginValidator con detail amigable y consistente
 export const loginValidator = [
   body('email')
-    .isEmail().withMessage('Por favor escribe un correo válido.'),
+    .exists({ checkFalsy: true })
+    .withMessage('El correo es obligatorio.')
+    .bail()
+    .isEmail()
+    .withMessage('El formato del correo es inválido.'),
+
   body('password')
-    .isString().isLength({ min: 6 })
-    .withMessage('Tu contraseña debe tener al menos 6 caracteres.'),
-  handleValidationErrors,
+    .exists({ checkFalsy: true })
+    .withMessage('La contraseña es obligatoria.')
+    .bail()
+    .isLength({ min: 6 })
+    .withMessage('La contraseña debe tener al menos 6 caracteres.'),
+
+  // ⬇️ Handler SOLO para login (no usamos handleValidationErrors aquí)
+  (req, res, next) => {
+    const r = validationResult(req);
+    if (r.isEmpty()) return next();
+
+    const first = r.array()[0]; // tomamos el primer error
+
+    // Mapeamos a códigos internos para el frontend
+    let detail = 'VALIDATION_ERROR';
+
+    if (first.path === 'email') {
+      if (first.msg === 'El correo es obligatorio.') {
+        detail = 'EMAIL_REQUIRED';
+      } else if (first.msg === 'El formato del correo es inválido.') {
+        detail = 'INVALID_EMAIL_FORMAT';
+      }
+    }
+
+    if (first.path === 'password') {
+      if (first.msg === 'La contraseña es obligatoria.') {
+        detail = 'PASSWORD_REQUIRED';
+      } else if (first.msg === 'La contraseña debe tener al menos 6 caracteres.') {
+        detail = 'PASSWORD_TOO_SHORT';
+      }
+    }
+
+    return res.status(422).json({
+      error: {
+        code: 'AUTH_LOGIN_ERROR',
+        message: first.msg, // texto que ve el usuario
+        detail,             // código que puede usar Android
+      },
+    });
+  }
 ];
+
 
 // REFRESH TOKEN
 export const refreshTokenValidator = [
